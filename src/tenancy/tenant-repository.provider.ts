@@ -70,9 +70,7 @@ export function tenantRepositoryProviders(
   return entities.map((entity) => ({
     provide: getRepositoryToken(entity),
     inject: [TenantContextService, getDataSourceToken()],
-    useFactory: (
-      tenantContext: TenantContextService,
-      dataSource: DataSource,
-    ) => crearProxyDeRepositorio(entity, tenantContext, dataSource),
+    useFactory: (tenantContext: TenantContextService, dataSource: DataSource) =>
+      crearProxyDeRepositorio(entity, tenantContext, dataSource),
   }));
 }

@@ -1,11 +1,25 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 import { APP_ROLE_NAMES } from '../auth/roles.constants';
 import {
-  TABLAS_CON_TENANT,
   habilitarRls,
   sqlDeshabilitarRls,
   sqlHabilitarRlsUsuarios,
 } from '../tenancy/rls';
+
+/**
+ * La lista va escrita acá adentro, no importada de `TABLAS_CON_TENANT`.
+ *
+ * Una migración es una foto de un momento: tiene que hacer siempre lo mismo,
+ * hoy y dentro de un año. `TABLAS_CON_TENANT` crece con cada fase, así que si
+ * esta migración la importara, al correrla en una base nueva intentaría prender
+ * RLS sobre tablas que en este punto de la historia todavía no existen, y
+ * fallaría con "relation does not exist".
+ *
+ * Las funciones (`habilitarRls`, `sqlHabilitarRlsUsuarios`) sí se importan: son
+ * la política de aislamiento, y si esa política cambia, cambia con su propia
+ * migración.
+ */
+const TABLAS_DE_ESTA_MIGRACION = ['usuario_rol'];
 
 /**
  * Fase 1: el esqueleto multitenant.
@@ -91,11 +105,11 @@ export class InitTenancy1758153600000 implements MigrationInterface {
       await queryRunner.query(sql);
     }
 
-    await habilitarRls(queryRunner, TABLAS_CON_TENANT);
+    await habilitarRls(queryRunner, TABLAS_DE_ESTA_MIGRACION);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    for (const tabla of [...TABLAS_CON_TENANT, 'usuarios']) {
+    for (const tabla of [...TABLAS_DE_ESTA_MIGRACION, 'usuarios']) {
       for (const sql of sqlDeshabilitarRls(tabla)) {
         await queryRunner.query(sql);
       }

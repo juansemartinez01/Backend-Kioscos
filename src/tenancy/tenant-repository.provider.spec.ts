@@ -47,7 +47,7 @@ describe('crearProxyDeRepositorio', () => {
 
     void proxy.find();
 
-    // El manager global no tiene app.tenant_id, asi que RLS no le devuelve
+    // El manager global no tiene app.tenant_id, así que RLS no le devuelve
     // filas. Falla cerrado.
     expect(dataSource.manager.getRepository).toHaveBeenCalledWith(Venta);
   });

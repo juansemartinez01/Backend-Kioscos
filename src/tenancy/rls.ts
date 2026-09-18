@@ -108,17 +108,79 @@ export async function deshabilitarRls(
 }
 
 /**
- * Las 32 tablas con dueño. `tenant` y `roles` quedan afuera a propósito:
- * `tenant` es el catálogo raíz y `roles` es global (el código compara roles por
- * nombre: Admin / Vendedor / Cocina).
+ * Las 32 tablas con dueño. Acá van 31: `usuarios` se maneja aparte, con
+ * `sqlHabilitarRlsUsuarios()`, por el escape del login.
  *
- * Se va llenando a medida que avanza el port (fase 2). Cada tabla que se suma
- * acá necesita además su índice compuesto — ver `TenantOwnedEntity`.
+ * Quedan afuera a propósito, y son las dos únicas excepciones del esquema:
+ *
+ *   tenant → es el catálogo raíz. Ponerle RLS por tenant sería circular.
+ *   roles  → es global. El código compara roles por nombre (Admin / Vendedor /
+ *            Cocina), no por id, así que la tabla es un enum en disco y no
+ *            tiene sentido duplicarla por cliente.
+ *
+ * Toda tabla nueva entra acá salvo que haya un motivo escrito para lo
+ * contrario, y entra en el mismo commit que la crea, junto con su índice
+ * compuesto `(tenant_id, ...)`.
+ *
+ * El orden de esta lista es por dominio, para poder leerla. No es el orden de
+ * creación de las tablas: ese lo manda la migración, por las FKs.
+ *
+ * NO IMPORTAR ESTA LISTA DESDE UNA MIGRACIÓN. La lista crece; una migración
+ * no. Una migración vieja que la importe va a intentar, en una base nueva,
+ * prender RLS sobre tablas que en ese punto de la historia no existían. Cada
+ * migración escribe adentro las tablas que ella misma crea.
+ *
+ * El consumidor legítimo es el test de aislamiento: recorre esta lista contra
+ * `pg_class.relrowsecurity` y contra los metadatos de TypeORM, y falla si
+ * alguien agregó una entidad con `tenant_id` y se olvidó de todo lo demás.
  */
 export const TABLAS_CON_TENANT: string[] = [
+  // accesos
   'usuario_rol',
-  // TODO(fase-2): las 30 restantes, a medida que se portan las entidades.
-  // Cada una entra acá Y en la migración que la crea, en el mismo commit.
+
+  // catálogo
+  'unidad',
+  'categoria',
+  'proveedor',
+  'almacen',
+  'producto',
+  'producto_precio_almacen',
+  'producto_precio_historial',
+
+  // stock
+  'stock_actual',
+  'movimiento_stock',
+  'parametros_reorden',
+  'orden_compra',
+  'orden_compra_item',
+
+  // ventas
+  'promocion',
+  'promocion_producto',
+  'venta',
+  'venta_item',
+  'venta_ajuste',
+  'ingreso_venta',
+
+  // facturación
+  'facturas',
+  'factura_venta_item',
+
+  // caja
+  'sesion_caja',
+  'movimiento_caja',
+  'extraccion_ingreso',
+
+  // gastos
+  'gasto_categoria',
+  'gasto',
+
+  // cuenta corriente
+  'cuenta_corriente',
+  'cuenta_corriente_venta',
+  'cuenta_corriente_pago',
+  'cuenta_corriente_pago_aplicacion',
+  'cuenta_corriente_movimiento',
 ];
 
 /**

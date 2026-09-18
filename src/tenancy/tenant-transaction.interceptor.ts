@@ -31,7 +31,10 @@ export class TenantTransactionInterceptor implements NestInterceptor {
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  intercept(_context: ExecutionContext, next: CallHandler): Observable<unknown> {
+  intercept(
+    _context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<unknown> {
     const store = this.tenantContext.getStore();
 
     // Ruta pública: no hay tenant, no abrimos transacción.

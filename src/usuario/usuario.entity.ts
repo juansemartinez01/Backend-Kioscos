@@ -1,6 +1,13 @@
-import { Column, Entity, Index, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { TenantOwnedEntity } from '../tenancy/tenant-owned.entity';
 import { UsuarioRol } from './usuario-rol.entity';
+import { Venta } from '../venta/venta.entity';
 
 /**
  * Dos unicidades distintas, a propósito:
@@ -38,4 +45,7 @@ export class Usuario extends TenantOwnedEntity {
 
   @OneToMany(() => UsuarioRol, (usuarioRol) => usuarioRol.usuario)
   roles: UsuarioRol[];
+
+  @OneToMany(() => Venta, (venta) => venta.usuario)
+  ventas: Venta[];
 }
