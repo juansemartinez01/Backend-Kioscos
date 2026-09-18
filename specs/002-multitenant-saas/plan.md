@@ -1,7 +1,7 @@
 # Plan: Proyecto espejo multitenant (repo nuevo)
 
 **Fecha**: 2026-09-18
-**Estado**: aprobado — fases 0, 1 y 2 implementadas
+**Estado**: aprobado — fases 0, 1 y 2 implementadas y verificadas contra Postgres 17.11
 **Origen**: port de `cantina-rochester-back` (15.930 líneas, 33 entidades, 23 controllers, 25 services, 69 DTOs)
 **Destino**: `kioscos-multitenant-back` → `github.com/juansemartinez01/Backend-Kioscos`
 
@@ -251,12 +251,12 @@ El repo nuevo necesita su propia constitución. Estos tres no sobreviven:
 |---|---|---|---|
 | 0 | ~~Bootstrap del repo~~ **hecha** | 1 | Repo limpio, `.gitignore` correcto, scaffold Nest, constitución nueva |
 | 1 | ~~Núcleo de tenancy~~ **hecha** | 3-4 | Entidad `tenant`, JWT, contexto de request, interceptor, override de repos, RLS base |
-| 2 | ~~Port de entidades~~ **hecha** | 4-5 | 30 entidades de negocio con `tenant_id`, los UNIQUE compuestos, 48 índices, 14 enums, políticas RLS, migración |
+| 2 | ~~Port de entidades~~ **hecha y probada** | 4-5 | 30 entidades de negocio con `tenant_id`, los UNIQUE compuestos, 48 índices, 14 enums, políticas RLS, migración con `down()` |
 | 3 | Índices y performance | 4-5 | Índices compuestos, 7 N+1, `eager`, los 2 upserts crudos |
 | 4 | Port de módulos | 8-10 | Los 23 controllers y 25 services |
 | 5 | Seguridad y contratos | 3-4 | `ValidationPipe` global, `@Roles()` activo, los 3 endpoints, CORS por config |
-| 6 | Tests de aislamiento | 3-4 | Que un tenant no vea al otro, en cada tabla |
-| 7 | Alta de tenants y deploy | 2-3 | Onboarding de cliente nuevo, docker-compose, EC2 |
+| 6 | Tests de aislamiento | 3-4 | Que un tenant no vea al otro, en cada tabla. Base: `scripts/verificacion/` |
+| 7 | Alta de tenants y deploy | 2-3 | Onboarding de cliente nuevo, docker-compose, EC2, **rol de app sin superusuario ni BYPASSRLS** |
 | | **Total** | **28-36 días persona** | ~6-8 semanas |
 
 Coincide con la estimación previa para escenario espejo (29-38 días), ahora con las fases
@@ -287,11 +287,46 @@ ese punto de la historia no existen. Cada migración escribe adentro las tablas 
 ella misma crea. El consumidor legítimo de la constante es el test de aislamiento
 de la fase 6.
 
-**Pendiente de la fase 2**: la migración está verificada contra los metadatos de
-TypeORM (30/30 tablas, 275 columnas, 48 índices, 30 políticas, y el orden de
-creación respeta FKs, enums y el ciclo `orden_compra` ↔ `gasto`), pero todavía no
-se corrió contra un Postgres real. Hace falta una base descartable o el
-docker-compose de la fase 7.
+### La fase 2, corrida contra un Postgres real
+
+Ya no está pendiente. El 2026-09-18 el esquema se aplicó contra PostgreSQL 17.11
+en una base descartable, y ahí aparecieron cosas que la verificación contra los
+metadatos de TypeORM no podía ver. Los scripts quedaron en
+`scripts/verificacion/`, con su README.
+
+**Estructura**: 35 tablas (30 de negocio + 4 de tenancy + `migrations`), 32 con
+`tenant_id`, 32 políticas, 14 enums, 90 índices. Ninguna tabla con `tenant_id`
+sin DEFAULT, sin NOT NULL, sin ENABLE+FORCE, o con una política a la que le
+falte USING o WITH CHECK. El ciclo `orden_compra` ↔ `gasto` quedó cerrado con
+las dos FKs. Ninguna FK a `tenant` sin `ON DELETE RESTRICT`.
+
+**Aislamiento**: 8/8. El DEFAULT completa `tenant_id` sin que el INSERT lo
+mencione — que es lo que permite portar los servicios sin tocar un solo
+`create()`. El SELECT de un tenant ve 1 de 2 filas. El WITH CHECK rechaza el
+INSERT cruzado. El UPDATE y el DELETE cruzados afectan 0 filas. Sin
+`app.tenant_id` seteado no se puede leer nada, ni siquiera por accidente.
+
+**Login**: 5/5. Dos tenants pueden tener cada uno su usuario `admin`; el email
+sigue siendo único global y case-insensitive. Sin `app.auth_lookup` el usuario
+de otro tenant es invisible; con el escape prendido el login lo resuelve. Y el
+escape es de lectura: con él prendido, el INSERT cruzado igual se rechaza.
+
+**`down()`**: probado. El round trip `up → down → up` deja la base en 1 tabla
+(`migrations`) y la segunda aplicación produce un esquema idéntico al de la
+primera — las tres verificaciones vuelven a dar lo mismo.
+
+**Hallazgo que cambia el deploy**: `FORCE ROW LEVEL SECURITY` protege contra el
+dueño de las tablas, pero **no contra los atributos de rol**. Conectado como
+superusuario, el mismo SELECT devolvió las filas de los dos tenants, con las
+políticas creadas y `relrowsecurity` en true. Un rol con BYPASSRLS hace lo
+mismo. No hay error ni señal de ningún tipo.
+
+Esto convierte algo que parecía de infraestructura en un requisito del diseño:
+**la app no puede conectarse con un superusuario ni con un rol con BYPASSRLS**,
+y eso no es el default de un Postgres recién creado ni del usuario maestro de un
+RDS. La fase 7 tiene que crear un rol dedicado, dueño del esquema, y el deploy
+tiene que correr `scripts/verificacion/00-bypass-rls.sql` contra la base real
+antes de dar por bueno el aislamiento.
 
 ---
 

@@ -21,6 +21,14 @@ const POLICY = 'tenant_isolation';
  *    aparentemente activas. Es el error más fácil de cometer acá y no da
  *    ninguna señal: parece que funciona hasta que un cliente ve datos de otro.
  *
+ *    Y FORCE tampoco alcanza contra los atributos de rol: un SUPERUSUARIO, o
+ *    cualquier rol con BYPASSRLS, ignora las políticas igual. Verificado contra
+ *    Postgres 17.11: conectado como superusuario, un SELECT con `app.tenant_id`
+ *    seteado devolvió las filas de los DOS tenants. El rol con el que la app se
+ *    conecta tiene que ser NOSUPERUSER y NOBYPASSRLS, y eso NO es el default de
+ *    un Postgres recién creado ni del usuario maestro de un RDS. Lo comprueba
+ *    `scripts/verificacion/00-bypass-rls.sql` en un solo query.
+ *
  * 3. La política, con USING y WITH CHECK:
  *      - USING      → filtra SELECT, UPDATE y DELETE
  *      - WITH CHECK → valida INSERT y UPDATE (impide escribir en otro tenant)
