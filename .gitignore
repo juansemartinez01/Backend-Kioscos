@@ -1,0 +1,14 @@
+/node_modules
+/dist
+/coverage
+*.log
+
+.env*
+!.env.example
+
+# El repo viejo no tenía esta línea: 7.719 de sus 8.014 archivos versionados
+# eran outputs/ y node_modules. El 96%.
+/outputs
+
+/docs/confidencial/
+.claude/settings.local.json
