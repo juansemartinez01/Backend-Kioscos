@@ -1,9 +1,9 @@
 # Plan: Proyecto espejo multitenant (repo nuevo)
 
 **Fecha**: 2026-09-18
-**Estado**: aprobado — fases 0 y 1 implementadas
+**Estado**: aprobado — fases 0, 1 y 2 implementadas
 **Origen**: port de `cantina-rochester-back` (15.930 líneas, 33 entidades, 23 controllers, 25 services, 69 DTOs)
-**Destino**: `kioscos-multitenant-back` (local; repo remoto pendiente de crear)
+**Destino**: `kioscos-multitenant-back` → `github.com/juansemartinez01/Backend-Kioscos`
 
 > Este documento se escribió en el repo viejo y se movió acá. Las secciones marcadas
 > **Corrección** rectifican decisiones de la primera versión que no sobrevivieron a la
@@ -251,7 +251,7 @@ El repo nuevo necesita su propia constitución. Estos tres no sobreviven:
 |---|---|---|---|
 | 0 | ~~Bootstrap del repo~~ **hecha** | 1 | Repo limpio, `.gitignore` correcto, scaffold Nest, constitución nueva |
 | 1 | ~~Núcleo de tenancy~~ **hecha** | 3-4 | Entidad `tenant`, JWT, contexto de request, interceptor, override de repos, RLS base |
-| 2 | Port de entidades | 4-5 | 32 entidades con `tenant_id`, los 9 UNIQUE compuestos, políticas RLS, migraciones |
+| 2 | ~~Port de entidades~~ **hecha** | 4-5 | 30 entidades de negocio con `tenant_id`, los UNIQUE compuestos, 48 índices, 14 enums, políticas RLS, migración |
 | 3 | Índices y performance | 4-5 | Índices compuestos, 7 N+1, `eager`, los 2 upserts crudos |
 | 4 | Port de módulos | 8-10 | Los 23 controllers y 25 services |
 | 5 | Seguridad y contratos | 3-4 | `ValidationPipe` global, `@Roles()` activo, los 3 endpoints, CORS por config |
@@ -261,6 +261,37 @@ El repo nuevo necesita su propia constitución. Estos tres no sobreviven:
 
 Coincide con la estimación previa para escenario espejo (29-38 días), ahora con las fases
 ancladas a hallazgos medidos.
+
+---
+
+### Corrección: lo que cambió al implementar la fase 2
+
+Tres cosas de este documento no sobrevivieron al código:
+
+**No son 32 entidades de negocio, son 30.** El plan contaba `tenant`, `usuarios`,
+`roles` y `usuario_rol`, que son de la fase 1. El total del esquema es 34 tablas:
+4 de tenancy + 30 de negocio.
+
+**`TenantOwnedEntity` ya no declara `@Index()` sobre `tenant_id`.** El plan lo daba
+por bueno. En la práctica quedaba duplicado en 29 de las 32 tablas, porque todas
+tienen un índice compuesto que arranca con `tenant_id` y Postgres lo usa igual para
+un predicado sobre la primera columna. Eran 29 índices que costaban escrituras sin
+acelerar ninguna lectura, con nombres autogenerados ilegibles (`IDX_89dcc27a…`).
+Las únicas tres tablas sin compuesto —`unidad`, `almacen`, `proveedor`— llevan
+ahora uno propio y nombrado.
+
+**Una migración no importa `TABLAS_CON_TENANT`.** La fase 1 lo hacía. La constante
+crece con cada entidad nueva, pero una migración es una foto de un momento: la de
+fase 1, corrida sobre una base nueva, intentaría prender RLS sobre 30 tablas que en
+ese punto de la historia no existen. Cada migración escribe adentro las tablas que
+ella misma crea. El consumidor legítimo de la constante es el test de aislamiento
+de la fase 6.
+
+**Pendiente de la fase 2**: la migración está verificada contra los metadatos de
+TypeORM (30/30 tablas, 275 columnas, 48 índices, 30 políticas, y el orden de
+creación respeta FKs, enums y el ciclo `orden_compra` ↔ `gasto`), pero todavía no
+se corrió contra un Postgres real. Hace falta una base descartable o el
+docker-compose de la fase 7.
 
 ---
 
